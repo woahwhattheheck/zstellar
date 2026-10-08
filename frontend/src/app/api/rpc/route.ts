@@ -11,10 +11,10 @@ const UPSTREAM =
 // because the WASM binary has the old deployment ledger hardcoded.
 const NEW_DEPLOYMENT_LEDGER = 3337836;
 
+// Same-origin callers need no CORS grants; omitting ACAO denies every
+// cross-origin read while the app keeps working unchanged.
 const CORS_HEADERS: Record<string, string> = {
   "content-type": "application/json",
-  "Cross-Origin-Resource-Policy": "cross-origin",
-  "Access-Control-Allow-Origin": "*",
   "Cache-Control": "no-store",
 };
 
@@ -186,7 +186,6 @@ export async function OPTIONS(): Promise<Response> {
   return new Response(null, {
     status: 204,
     headers: {
-      "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
       "Access-Control-Allow-Headers": "content-type",
     },
