@@ -6,7 +6,7 @@ import {
   Transaction,
   xdr,
 } from "@stellar/stellar-sdk";
-import { STELLAR } from "@/lib/stellar/config";
+import { CONTRACTS, STELLAR } from "@/lib/stellar/config";
 
 // The relayer secret lives only on the server. This route signs the
 // `sender.require_auth()` entry and the transaction envelope with the relayer
@@ -53,6 +53,53 @@ function patchAuthEntries(txXdr: string, signedAuthEntries: string[]): string {
   throw new Error("No invokeHostFunction operation found to attach auth");
 }
 
+
+class RelayTargetError extends Error {}
+
+// The relayer signs and pays fees for whatever envelope it is given — without a
+// target check a caller could have the relayer fund arbitrary Soroban calls (or
+// a classic payment). Every invokeHostFunction op must call `transact` on the
+// pool contract, and at least one must exist.
+function validateRelayTarget(txXdr: string): void {
+  let env: xdr.TransactionEnvelope;
+  try {
+    env = xdr.TransactionEnvelope.fromXDR(txXdr, "base64");
+  } catch {
+    throw new RelayTargetError("txXdr is not a valid transaction envelope");
+  }
+  const v1 = env.v1();
+  if (!v1) {
+    throw new RelayTargetError("Unsupported transaction envelope (expected v1)");
+  }
+  let invokeCount = 0;
+  for (const op of v1.tx().operations()) {
+    const invoke = op.body()?.invokeHostFunctionOp?.();
+    if (!invoke) continue;
+    invokeCount += 1;
+    const hostFn = invoke.hostFunction();
+    if (
+      hostFn.switch() !== xdr.HostFunctionType.hostFunctionTypeInvokeContract()
+    ) {
+      throw new RelayTargetError(
+        "Relayer only submits invokeContract host functions",
+      );
+    }
+    const call = hostFn.invokeContract();
+    const target = Address.fromScAddress(call.contractAddress()).toString();
+    if (
+      target !== CONTRACTS.pool ||
+      call.functionName().toString() !== "transact"
+    ) {
+      throw new RelayTargetError(
+        "Relayer only submits pool transact calls",
+      );
+    }
+  }
+  if (invokeCount === 0) {
+    throw new RelayTargetError("Transaction has no invokeHostFunction op");
+  }
+}
+
 export async function POST(request: Request): Promise<Response> {
   const secret = process.env.RELAYER_SECRET;
   if (!secret) {
@@ -93,6 +140,7 @@ export async function POST(request: Request): Promise<Response> {
   });
 
   try {
+    validateRelayTarget(txXdr);
     let needsPatch = false;
     const signed: string[] = [];
     for (const entryXdr of authEntries) {
@@ -156,6 +204,7 @@ export async function POST(request: Request): Promise<Response> {
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return Response.json({ error: message }, { status: 502 });
+    const status = error instanceof RelayTargetError ? 400 : 502;
+    return Response.json({ error: message }, { status });
   }
 }
