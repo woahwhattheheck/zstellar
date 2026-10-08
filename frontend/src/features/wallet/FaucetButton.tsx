@@ -22,13 +22,18 @@ export function FaucetButton() {
     }
     setClaiming(true);
     setMessage("Requesting from Friendbot...");
-    const ok = await wallet.fund();
-    setMessage(
-      ok
-        ? "Funded 10,000 XLM. Balance updated."
-        : "Funding failed (account may already be funded).",
-    );
-    setClaiming(false);
+    try {
+      const ok = await wallet.fund();
+      setMessage(
+        ok
+          ? "Faucet funded your account. Balance updated."
+          : "Funding failed (account may already be funded).",
+      );
+    } catch {
+      setMessage("Funding failed (account may already be funded).");
+    } finally {
+      setClaiming(false);
+    }
   };
 
   return (
