@@ -10,9 +10,11 @@ import {
 import { server } from "./client";
 import { CONTRACTS, STELLAR } from "./config";
 
-function leafToU256ScVal(leaf: string) {
+// `BigInt` already accepts both decimal and `0x`-prefixed leaf text, so no
+// prefix branching is needed here.
+export function leafToU256ScVal(leaf: string) {
   const text = leaf.trim();
-  const value = text.startsWith("0x") ? BigInt(text) : BigInt(text);
+  const value = BigInt(text);
   return nativeToScVal(value, { type: "u256" });
 }
 
