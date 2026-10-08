@@ -77,6 +77,7 @@ export function ActionTabs({
           <button
             key={item.id}
             type="button"
+            aria-current={isActive ? "true" : undefined}
             onClick={() => setActive(item.id)}
             className={`relative cursor-pointer py-1 pl-4 text-left text-[15px] font-medium transition-colors ${
               isActive ? "text-fg" : "text-faint hover:text-fg"
