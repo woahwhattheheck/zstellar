@@ -45,12 +45,32 @@ export async function fundWithFriendbot(address: string): Promise<boolean> {
   }
 }
 
+/** Thrown when the XLM balance could not be loaded due to a transport/server
+ * failure. Callers should surface an error and offer retry rather than render
+ * a misleading zero balance. */
+export class XlmBalanceUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "XlmBalanceUnavailableError";
+  }
+}
+
 export async function getXlmBalance(address: string): Promise<string> {
   try {
     const account = await horizon.loadAccount(address);
     const native = account.balances.find((b) => b.asset_type === "native");
     return native?.balance ?? "0";
-  } catch {
-    return "0";
+  } catch (error) {
+    // Horizon 404 means the account was never funded: a legitimate zero.
+    const status =
+      error && typeof error === "object" && "response" in error
+        ? (error as { response?: { status?: number } }).response?.status
+        : undefined;
+    if (status === 404 || error instanceof Horizon.NotFoundError) {
+      return "0";
+    }
+    throw new XlmBalanceUnavailableError(
+      "Could not load the XLM balance from Horizon. Check connectivity and retry.",
+    );
   }
 }

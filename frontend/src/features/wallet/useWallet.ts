@@ -42,8 +42,20 @@ export function useWallet() {
   const [state, setState] = useState<WalletState>(INITIAL);
 
   const load = useCallback(async (address: string, network: string) => {
-    const balance = await getXlmBalance(address);
-    setState({ address, network, balance, connecting: false, error: null });
+    try {
+      const balance = await getXlmBalance(address);
+      setState({ address, network, balance, connecting: false, error: null });
+    } catch (error) {
+      // Balance transport failure: keep the session connected but surface the
+      // error so the UI can offer a retry instead of showing a phantom "0".
+      setState((s) => ({
+        ...s,
+        address,
+        network,
+        connecting: false,
+        error: errorMessage(error, "Could not load the XLM balance."),
+      }));
+    }
   }, []);
 
   useEffect(() => {
