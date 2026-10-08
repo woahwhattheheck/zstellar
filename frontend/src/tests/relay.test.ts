@@ -29,6 +29,15 @@ describe("POST /api/relay origin checks", () => {
     expect(res.status).toBe(403);
   });
 
+  it("rejects a same-host Origin with a different scheme", async () => {
+    const res = await POST(
+      relayRequest("app-scheme.example", {
+        origin: "http://app-scheme.example",
+      }),
+    );
+    expect(res.status).toBe(403);
+  });
+
   it("rejects Sec-Fetch-Site: cross-site with 403", async () => {
     const res = await POST(
       relayRequest("app2.example", { fetchSite: "cross-site" }),
