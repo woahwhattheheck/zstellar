@@ -26,6 +26,7 @@ export function Hero() {
             width={16}
             height={16}
             className="inline-block h-4 w-4 object-contain dark:invert"
+            unoptimized
           />
           Stellar.
         </span>

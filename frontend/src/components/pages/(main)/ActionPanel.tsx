@@ -221,6 +221,7 @@ export function ActionPanel() {
               width={28}
               height={28}
               className={`h-7 w-7 object-contain ${asset.imgClass}`}
+              unoptimized
             />
             {asset.symbol}
             <TbChevronDown className="h-4 w-4 text-muted" />
@@ -314,6 +315,7 @@ export function ActionPanel() {
             width={16}
             height={16}
             className="h-4 w-4 object-contain dark:invert"
+            unoptimized
           />
         </span>
       </div>
@@ -418,6 +420,7 @@ export function ActionPanel() {
                         width={36}
                         height={36}
                         className={`h-9 w-9 object-contain ${token.imgClass}`}
+                        unoptimized
                       />
                       <span className="flex flex-col">
                         <span className="text-[15px] font-semibold text-fg">
