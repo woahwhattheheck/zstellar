@@ -16,6 +16,15 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
+// The confirmation poll must finish inside maxDuration, leaving margin for
+// auth-entry patching and sendTransaction. Both constants derive from
+// maxDuration so a future bump cannot silently overrun the platform limit.
+const CONFIRM_POLL_INTERVAL_MS = 1_000;
+const CONFIRM_MARGIN_MS = 10_000;
+const CONFIRM_MAX_ATTEMPTS = Math.floor(
+  (maxDuration * 1_000 - CONFIRM_MARGIN_MS) / CONFIRM_POLL_INTERVAL_MS,
+);
+
 type RelayBody = {
   txXdr?: string;
   authEntries?: string[];
@@ -137,8 +146,10 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
 
-    for (let i = 0; i < 30; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+    for (let i = 0; i < CONFIRM_MAX_ATTEMPTS; i++) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, CONFIRM_POLL_INTERVAL_MS),
+      );
       const res = await server.getTransaction(hash);
       if (res?.status === "SUCCESS") {
         return Response.json({ hash });
