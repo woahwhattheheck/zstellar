@@ -1,15 +1,8 @@
 "use client";
 
-import { AnimatePresence, motion } from "motion/react";
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import {
-  TbChevronDown,
-  TbExternalLink,
-  TbSearch,
-  TbShieldLock,
-  TbX,
-} from "react-icons/tb";
+import { TbExternalLink, TbShieldLock } from "react-icons/tb";
 import {
   depositWithAutoRegister,
   getShieldedBalance,
@@ -47,28 +40,12 @@ function trimBalance(raw: string): string {
   return cleanFrac ? `${cleanWhole}.${cleanFrac}` : cleanWhole;
 }
 
-const TOKENS = [
-  {
-    symbol: "XLM",
-    name: "Stellar Lumens",
-    logo: "/Assets/Images/Logo-Coin/stellar-logo.svg",
-    imgClass: "dark:invert",
-  },
-  {
-    symbol: "USDC",
-    name: "USD Coin",
-    logo: "/Assets/Images/Logo-Coin/usdc-logo.svg",
-    imgClass: "",
-  },
-] as const;
+const XLM_LOGO = "/Assets/Images/Logo-Coin/stellar-logo.svg";
 
 export function ActionPanel() {
   const { active } = useActionTab();
   const [amount, setAmount] = useState("");
   const [recipient, setRecipient] = useState("");
-  const [assetIndex, setAssetIndex] = useState(0);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
@@ -78,15 +55,6 @@ export function ActionPanel() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const wallet = useWalletContext();
 
-  const asset = TOKENS[assetIndex];
-  const filteredTokens = TOKENS.filter((token) => {
-    const q = query.trim().toLowerCase();
-    return (
-      !q ||
-      token.symbol.toLowerCase().includes(q) ||
-      token.name.toLowerCase().includes(q)
-    );
-  });
   const connected = Boolean(wallet.address);
   const balance = wallet.balance ?? "0.00";
   const tab = TABS.find((item) => item.id === active) ?? TABS[0];
@@ -210,21 +178,16 @@ export function ActionPanel() {
             onChange={(event) => setAmount(event.target.value)}
             className="w-full bg-transparent text-5xl font-medium tracking-tight text-fg outline-none placeholder:text-faint"
           />
-          <button
-            type="button"
-            onClick={() => setMenuOpen(true)}
-            className="flex shrink-0 cursor-pointer items-center gap-2 rounded-full border border-line bg-fill-2 py-1.5 pl-1.5 pr-3 text-[15px] font-bold text-fg transition-colors hover:bg-fill-3"
-          >
+          <span className="flex shrink-0 items-center gap-2 rounded-full border border-line bg-fill-2 py-1.5 pl-1.5 pr-3 text-[15px] font-bold text-fg">
             <Image
-              src={asset.logo}
-              alt={asset.symbol}
+              src={XLM_LOGO}
+              alt="XLM"
               width={28}
               height={28}
-              className={`h-7 w-7 object-contain ${asset.imgClass}`}
+              className="h-7 w-7 object-contain dark:invert"
             />
-            {asset.symbol}
-            <TbChevronDown className="h-4 w-4 text-muted" />
-          </button>
+            XLM
+          </span>
         </div>
 
         <div className="mt-3 flex items-center justify-between gap-3 text-sm text-muted">
@@ -357,95 +320,6 @@ export function ActionPanel() {
       ) : (
         <p className="mt-4 text-center text-xs text-muted">{tab.hint}</p>
       )}
-
-      <AnimatePresence>
-        {menuOpen ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            onClick={() => setMenuOpen(false)}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4"
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96, y: 8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 8 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
-              onClick={(event) => event.stopPropagation()}
-              className="w-full max-w-md overflow-hidden rounded-2xl border border-line bg-panel shadow-2xl shadow-[color:var(--shadow)]"
-            >
-              <div className="flex items-center justify-between px-5 py-4">
-                <h2 className="text-lg font-semibold text-fg">Select</h2>
-                <button
-                  type="button"
-                  onClick={() => setMenuOpen(false)}
-                  className="cursor-pointer text-muted transition-colors hover:text-fg"
-                >
-                  <TbX className="h-5 w-5" />
-                </button>
-              </div>
-
-              <div className="px-5 pb-4">
-                <div className="flex items-center gap-2 rounded-xl border border-line bg-fill px-3 py-2.5 focus-within:border-line-focus">
-                  <TbSearch className="h-4 w-4 text-faint" />
-                  <input
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Search by token symbol or name"
-                    className="w-full bg-transparent text-sm text-fg outline-none placeholder:text-faint"
-                  />
-                </div>
-              </div>
-
-              <div className="max-h-80 overflow-y-auto px-2 pb-3">
-                {filteredTokens.map((token) => (
-                  <button
-                    key={token.symbol}
-                    type="button"
-                    onClick={() => {
-                      setAssetIndex(TOKENS.indexOf(token));
-                      setMenuOpen(false);
-                      setQuery("");
-                    }}
-                    className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-fill"
-                  >
-                    <span className="flex items-center gap-3">
-                      <Image
-                        src={token.logo}
-                        alt={token.symbol}
-                        width={36}
-                        height={36}
-                        className={`h-9 w-9 object-contain ${token.imgClass}`}
-                      />
-                      <span className="flex flex-col">
-                        <span className="text-[15px] font-semibold text-fg">
-                          {token.symbol}
-                        </span>
-                        <span className="text-xs text-faint">{token.name}</span>
-                      </span>
-                    </span>
-                    <span className="flex flex-col items-end">
-                      <span className="text-[15px] font-medium text-fg">
-                        {token.symbol === "XLM" ? formatXlm(balance) : "0"}
-                      </span>
-                      <span className="text-xs text-faint">
-                        {token.symbol === "XLM" && connected ? "Testnet" : "--"}
-                      </span>
-                    </span>
-                  </button>
-                ))}
-                {filteredTokens.length === 0 ? (
-                  <p className="px-3 py-6 text-center text-sm text-faint">
-                    No tokens found.
-                  </p>
-                ) : null}
-              </div>
-            </motion.div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
 
       <TxModal
         phase={phase}
