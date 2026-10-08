@@ -14,10 +14,10 @@
  * Safe to run repeatedly: an existing relayer is reused and just topped up.
  */
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Horizon, Keypair } from "@stellar/stellar-sdk";
+import { readEnv, writeEnv } from "./env-file.mjs";
 
 const HORIZON = "https://horizon-testnet.stellar.org";
 const FRIENDBOT = "https://friendbot.stellar.org";
@@ -25,31 +25,6 @@ const FRIENDBOT = "https://friendbot.stellar.org";
 const here = dirname(fileURLToPath(import.meta.url));
 const envPath = resolve(here, "..", ".env.local");
 
-function readEnv() {
-  if (!existsSync(envPath)) return { lines: [], map: {} };
-  const text = readFileSync(envPath, "utf8");
-  const lines = text.split("\n");
-  const map = {};
-  for (const line of lines) {
-    const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-    if (m) map[m[1]] = m[2];
-  }
-  return { lines, map };
-}
-
-function writeEnv(updates) {
-  const text = existsSync(envPath) ? readFileSync(envPath, "utf8") : "";
-  const lines = text.length ? text.split("\n") : [];
-  for (const [key, value] of Object.entries(updates)) {
-    const idx = lines.findIndex((l) => l.startsWith(`${key}=`));
-    const entry = `${key}=${value}`;
-    if (idx >= 0) lines[idx] = entry;
-    else lines.push(entry);
-  }
-  // collapse trailing blank lines into a single newline
-  while (lines.length && lines[lines.length - 1].trim() === "") lines.pop();
-  writeFileSync(envPath, `${lines.join("\n")}\n`);
-}
 
 async function fundIfNeeded(server, address) {
   try {
@@ -72,7 +47,7 @@ async function fundIfNeeded(server, address) {
 }
 
 async function main() {
-  const { map } = readEnv();
+  const { map } = readEnv(envPath);
   let keypair;
   if (map.RELAYER_SECRET) {
     keypair = Keypair.fromSecret(map.RELAYER_SECRET);
@@ -82,7 +57,7 @@ async function main() {
     console.log(`Generated new relayer: ${keypair.publicKey()}`);
   }
 
-  writeEnv({
+  writeEnv(envPath, {
     RELAYER_SECRET: keypair.secret(),
     NEXT_PUBLIC_RELAYER_ADDRESS: keypair.publicKey(),
   });
