@@ -80,16 +80,17 @@ function patchAuthEntries(txXdr, signedAuthEntries) {
   const auth = signedAuthEntries.map((e) =>
     xdr.SorobanAuthorizationEntry.fromXDR(e, "base64"),
   );
-  for (const op of v1.tx().operations()) {
-    const invoke = op.body()?.invokeHostFunctionOp?.();
-    if (!invoke) continue;
-    invoke.auth(auth);
-    return env.toXDR("base64");
+  const invokes = v1
+    .tx()
+    .operations()
+    .filter((op) => op.body()?.invokeHostFunctionOp?.() != null);
+  if (invokes.length !== 1) {
+    throw new Error(
+      `Expected exactly one invokeHostFunction operation, found ${invokes.length}`,
+    );
   }
-
-  throw new Error(
-    "No invokeHostFunction operation found to attach auth entries",
-  );
+  invokes[0].body().invokeHostFunctionOp().auth(auth);
+  return env.toXDR("base64");
 }
 
 /**
