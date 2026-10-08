@@ -88,18 +88,35 @@ export function relayerConfigured(): boolean {
 
 // Submits the proven tx through the server-side relayer instead of the wallet,
 // so the note owner never signs and never appears as the on-chain source.
+const RELAY_TIMEOUT_MS = 45_000;
+
 function makeRelaySubmitFn(onStatus?: OnStatus): SubmitFn {
   return async (proved: Prepared) => {
     onStatus?.({ stage: "submit", message: "Submitting via relayer..." });
-    const res = await fetch("/api/relay", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        txXdr: proved.sorobanTx.txXdr,
-        authEntries: proved.sorobanTx.authEntries,
-        latestLedger: proved.sorobanTx.latestLedger ?? 0,
-      }),
-    });
+    // The server route can poll for up to ~30s; bound the fetch a little past
+    // that so a hung connection cannot wedge the UI in a busy state forever.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), RELAY_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch("/api/relay", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          txXdr: proved.sorobanTx.txXdr,
+          authEntries: proved.sorobanTx.authEntries,
+          latestLedger: proved.sorobanTx.latestLedger ?? 0,
+        }),
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error("Relay timed out — try again");
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
     let data: { hash?: string; error?: string } = {};
     try {
       data = (await res.json()) as { hash?: string; error?: string };
