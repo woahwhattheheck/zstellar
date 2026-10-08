@@ -1,17 +1,12 @@
 import { browserRpcUrl, CONTRACTS, STELLAR } from "@/lib/stellar/config";
 import { registerAspMembership } from "@/lib/stellar/register";
 import type { NoteRow, OnStatus, Prepared, SubmitFn } from "./types";
+import { maybeResetStorage } from "./storage-reset";
 import { submitPreparedSorobanTx } from "./vendor/stellar.js";
 import { deriveKeysFromWallet } from "./vendor/wallet.js";
 import { getHandle, initializeWasm } from "./vendor/wasm-facade.js";
 
 export type { OnStatus, StatusUpdate } from "./types";
-
-declare global {
-  interface FileSystemDirectoryHandle {
-    keys(): AsyncIterableIterator<string>;
-  }
-}
 
 const XLM_DECIMALS = 7;
 
@@ -112,40 +107,6 @@ function makeRelaySubmitFn(onStatus?: OnStatus): SubmitFn {
     onStatus?.({ stage: "confirm", message: "Confirmed via relayer." });
     return data.hash;
   };
-}
-
-async function wipeOpfs(): Promise<void> {
-  const storage = typeof navigator !== "undefined" ? navigator.storage : null;
-  if (!storage?.getDirectory) return;
-  const root = await storage.getDirectory();
-  const names: string[] = [];
-  for await (const name of root.keys()) names.push(name);
-  await Promise.all(
-    names.map((name) =>
-      root.removeEntry(name, { recursive: true }).catch(() => undefined),
-    ),
-  );
-}
-
-function clearAspFlags(): void {
-  if (typeof window === "undefined") return;
-  for (let i = window.localStorage.length - 1; i >= 0; i--) {
-    const key = window.localStorage.key(i);
-    if (key?.startsWith("zStellar:asp-registered:")) {
-      window.localStorage.removeItem(key);
-    }
-  }
-}
-
-let storageChecked = false;
-async function maybeResetStorage(): Promise<void> {
-  if (storageChecked || typeof window === "undefined") return;
-  storageChecked = true;
-  const key = "zStellar:engine-pool";
-  if (window.localStorage.getItem(key) === CONTRACTS.pool) return;
-  await wipeOpfs();
-  clearAspFlags();
-  window.localStorage.setItem(key, CONTRACTS.pool);
 }
 
 async function initEngine() {
