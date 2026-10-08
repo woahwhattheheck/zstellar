@@ -112,6 +112,15 @@ jobs:
         \ > 0) {\n  console.error(\"README.md is missing CONTRACTS addresses: \" +\
         \ missing.join(\", \"));\n  process.exit(1);\n}\nconsole.log(\"README.md lists\
         \ all \" + addresses.length + \" CONTRACTS addresses.\");\n'\n"
+  deployment-ledger:
+    name: deployment-ledger
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - name: Check out the repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+    - name: Check NEW_DEPLOYMENT_LEDGER matches the patched WASM bundles
+      run: node frontend/scripts/check-deployment-ledger.mjs
   headers:
     name: headers
     runs-on: ubuntu-latest
@@ -159,6 +168,7 @@ jobs:
     - build
     - secret-scan
     - docs-drift
+    - deployment-ledger
     - headers
     steps:
     - name: Verify every required job succeeded
