@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# zStellar frontend
 
-## Getting Started
+Next.js app for zStellar — the privacy layer for payments on Stellar testnet.
+Deposit, pay, and cash out without revealing amounts or the sender → receiver
+link. See the [root README](../README.md) for the project overview and
+[docs/DEPLOYMENT.md](../docs/DEPLOYMENT.md) for deployment.
 
-First, run the development server:
+## Commands
+
+pnpm only — do not use `npm`, `yarn`, or `bun`.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
+pnpm dev       # development server on http://localhost:3000
+pnpm build     # production build
+pnpm start     # serve the production build
+pnpm lint      # biome check
+pnpm format    # biome format --write
+pnpm test      # vitest run
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Layout
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The app router lives under `src/app`; the main page is
+`src/app/(main)/page.tsx`. Notable directories:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `src/app/(main)/` — landing page and the `/app` experience
+- `src/app/api/relay` — server-side relayer for shielded transactions
+- `src/app/api/rpc` — Soroban RPC proxy (bounds `startLedger` ranges)
+- `src/components/` — landing sections, `pages/(main)` app UI, `ui/` primitives
+- `src/engine/` — WASM prover facade, key derivation, shielded-pool actions
+- `src/features/wallet/` — Freighter connection state and faucet
+- `src/lib/stellar/` — Horizon/Soroban clients and contract addresses
+- `src/tests/` — vitest suites (`../` resolves to `src/`; `@/` maps to `src/`
+  via `vitest.config.ts`)
 
-## Learn More
+## Cross-origin isolation
 
-To learn more about Next.js, take a look at the following resources:
+`next.config.ts` sets `Cross-Origin-Opener-Policy: same-origin` and
+`Cross-Origin-Embedder-Policy: require-corp` on every route — the Web Worker
+prover needs `SharedArrayBuffer`, which browsers only expose on cross-origin
+isolated pages. Because of COEP, every asset the page loads must be same-origin
+(see `public/Assets`) or explicitly CORP/CORS-enabled; third-party CDN embeds
+will be refused.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Fonts
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Inter and Geist Mono are loaded via `next/font/google` in
+`src/app/layout.tsx`.
