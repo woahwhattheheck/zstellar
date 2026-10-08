@@ -217,9 +217,12 @@ export function ActionPanel() {
           >
             <Image
               src={asset.logo}
-              alt={asset.symbol}
+              alt=""
+              aria-hidden="true"
               width={28}
               height={28}
+              loading="lazy"
+              decoding="async"
               className={`h-7 w-7 object-contain ${asset.imgClass}`}
             />
             {asset.symbol}
@@ -231,9 +234,12 @@ export function ActionPanel() {
           <span className="hidden items-center gap-1.5 sm:flex">
             <Image
               src="/Assets/Images/Logo-Brands/zStellar-logo.png"
-              alt="zStellar"
+              alt=""
+              aria-hidden="true"
               width={16}
               height={16}
+              loading="lazy"
+              decoding="async"
               className="h-4 w-4 rounded object-contain"
             />
             <span className="text-[11px] text-faint">powered by</span>
@@ -299,9 +305,12 @@ export function ActionPanel() {
         <span className="flex items-center gap-2 text-muted">
           <Image
             src="/Assets/Images/Logo-Brands/zStellar-logo.png"
-            alt="zStellar"
+            alt=""
+            aria-hidden="true"
             width={20}
             height={20}
+            loading="lazy"
+            decoding="async"
             className="h-5 w-5 rounded object-contain"
           />
           Shielded Balance
@@ -310,9 +319,12 @@ export function ActionPanel() {
           {shielded != null ? formatXlm(stroopsToXlm(shielded)) : "0"} XLM
           <Image
             src="/Assets/Images/Logo-Coin/stellar-logo.svg"
-            alt="XLM"
+            alt=""
+            aria-hidden="true"
             width={16}
             height={16}
+            loading="lazy"
+            decoding="async"
             className="h-4 w-4 object-contain dark:invert"
           />
         </span>
@@ -414,9 +426,12 @@ export function ActionPanel() {
                     <span className="flex items-center gap-3">
                       <Image
                         src={token.logo}
-                        alt={token.symbol}
+                        alt=""
+                        aria-hidden="true"
                         width={36}
                         height={36}
+                        loading="lazy"
+                        decoding="async"
                         className={`h-9 w-9 object-contain ${token.imgClass}`}
                       />
                       <span className="flex flex-col">

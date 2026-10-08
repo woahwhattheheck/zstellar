@@ -59,9 +59,12 @@ export function HeroSection() {
           <span className="flex items-center gap-1.5 text-xs text-muted">
             <Image
               src="/Assets/Images/Logo-Brands/zStellar-logo.png"
-              alt="zStellar"
+              alt=""
+              aria-hidden="true"
               width={14}
               height={14}
+              loading="lazy"
+              decoding="async"
               className="h-3.5 w-3.5 rounded object-contain"
             />
             Proven with

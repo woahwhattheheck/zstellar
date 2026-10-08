@@ -34,9 +34,12 @@ export function WalletButton() {
       >
         <Image
           src="/Assets/Images/Logo-Brands/zStellar-logo.png"
-          alt="zStellar"
+          alt=""
+          aria-hidden="true"
           width={24}
           height={24}
+          loading="lazy"
+          decoding="async"
           className="h-6 w-6 rounded-full object-contain"
         />
         {short}

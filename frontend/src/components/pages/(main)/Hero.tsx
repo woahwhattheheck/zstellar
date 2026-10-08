@@ -22,9 +22,12 @@ export function Hero() {
         <span className="inline-flex items-center gap-1 whitespace-nowrap align-baseline">
           <Image
             src="/Assets/Images/Logo-Coin/stellar-logo.svg"
-            alt="Stellar"
+            alt=""
+            aria-hidden="true"
             width={16}
             height={16}
+            loading="lazy"
+            decoding="async"
             className="inline-block h-4 w-4 object-contain dark:invert"
           />
           Stellar.
