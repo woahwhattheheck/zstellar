@@ -94,6 +94,19 @@ jobs:
         \ || true)\nif [ -n \"$MATCHES\" ]; then\n  echo \"::error::Found committed\
         \ Stellar secret seed in tracked files:\"\n  echo \"$MATCHES\"\n  exit 1\n\
         fi\necho \"Clean: No committed secret keys found in tracked files.\"\n"
+  gitleaks:
+    name: Gitleaks secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Run gitleaks
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITLEAKS_ENABLE_SUMMARY: "true"
   docs-drift:
     name: docs-drift
     runs-on: ubuntu-latest
@@ -158,6 +171,7 @@ jobs:
     - lint
     - build
     - secret-scan
+    - gitleaks
     - docs-drift
     - headers
     steps:
