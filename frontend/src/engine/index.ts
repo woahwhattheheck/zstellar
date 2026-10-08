@@ -263,7 +263,9 @@ export async function depositWithAutoRegister(
 // When relay is on, the app's relayer becomes the Soroban tx source and the
 // `sender` arg of `transact`, and the proven tx is submitted server-side by the
 // relayer keypair, so the note owner's address never appears on-chain. Otherwise
-// the note owner signs and submits via the wallet as before.
+// the note owner signs and submits via the wallet, and is also the
+// `transact` sender (the pool's sender semantics are the note owner on the
+// wallet path, the relayer when relayed).
 function relaySetup(
   noteOwner: string,
   useRelay: boolean | undefined,
@@ -272,7 +274,7 @@ function relaySetup(
   if (useRelay && RELAYER_ADDRESS && RELAYER_ADDRESS !== noteOwner) {
     return { submitFn: makeRelaySubmitFn(onStatus), sender: RELAYER_ADDRESS };
   }
-  return { submitFn: makeSubmitFn(noteOwner, onStatus), sender: "" };
+  return { submitFn: makeSubmitFn(noteOwner, onStatus), sender: noteOwner };
 }
 
 export async function transfer(

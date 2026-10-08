@@ -48,6 +48,10 @@ export interface WebClient {
     recipientEncKey: string,
     submitFn: SubmitFn,
     onStatus: OnStatus | undefined,
+    /**
+     * `transact` sender: the relayer address on relayed calls, or the note
+     * owner's own address when the wallet submits directly.
+     */
     senderAddress: string,
   ): Promise<string[]>;
   executeWithdraw(
@@ -57,6 +61,7 @@ export interface WebClient {
     amount: bigint,
     submitFn: SubmitFn,
     onStatus: OnStatus | undefined,
+    /** `transact` sender — relayer address when relayed, note owner otherwise. */
     senderAddress: string,
   ): Promise<string[]>;
 }
