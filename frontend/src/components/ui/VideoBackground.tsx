@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // Two looping videos stacked; we crossfade between them when the theme changes
 // by watching the `.dark` class on <html>. Both are served from /public
@@ -9,6 +9,8 @@ import { useEffect, useState } from "react";
 // app; pass `fixed={false}` to contain it inside a `relative` hero section.
 export function VideoBackground({ fixed = true }: { fixed?: boolean }) {
   const [isDark, setIsDark] = useState(true);
+  const lightRef = useRef<HTMLVideoElement | null>(null);
+  const darkRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -19,13 +21,24 @@ export function VideoBackground({ fixed = true }: { fixed?: boolean }) {
     return () => observer.disconnect();
   }, []);
 
+  // Only the visible video runs a decode loop. The hidden one pauses but stays
+  // mounted with its buffered frame, so the opacity crossfade still has pixels
+  // to fade through instead of flashing black.
+  useEffect(() => {
+    const [visible, hidden] = isDark
+      ? [darkRef.current, lightRef.current]
+      : [lightRef.current, darkRef.current];
+    hidden?.pause();
+    void visible?.play().catch(() => {});
+  }, [isDark]);
+
   return (
     <div
       className={`pointer-events-none z-0 ${fixed ? "fixed inset-0" : "absolute inset-0"}`}
     >
       <video
+        ref={lightRef}
         aria-hidden
-        autoPlay
         muted
         loop
         playsInline
@@ -39,8 +52,8 @@ export function VideoBackground({ fixed = true }: { fixed?: boolean }) {
         <source src="/Assets/Videos/bg-light.mp4" type="video/mp4" />
       </video>
       <video
+        ref={darkRef}
         aria-hidden
-        autoPlay
         muted
         loop
         playsInline
