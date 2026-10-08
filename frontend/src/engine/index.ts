@@ -142,10 +142,14 @@ async function maybeResetStorage(): Promise<void> {
   if (storageChecked || typeof window === "undefined") return;
   storageChecked = true;
   const key = "zStellar:engine-pool";
-  if (window.localStorage.getItem(key) === CONTRACTS.pool) return;
-  await wipeOpfs();
-  clearAspFlags();
-  window.localStorage.setItem(key, CONTRACTS.pool);
+  try {
+    if (window.localStorage.getItem(key) === CONTRACTS.pool) return;
+    await wipeOpfs();
+    clearAspFlags();
+    window.localStorage.setItem(key, CONTRACTS.pool);
+  } catch {
+    // Storage unavailable (private mode, blocked cookies): reset skipped.
+  }
 }
 
 async function initEngine() {
