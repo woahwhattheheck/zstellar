@@ -160,7 +160,7 @@ export async function getWalletNetwork() {
  * @param {string} fallbackMessage - Default message when none provided.
  * @returns {Error} - Error with `code` set to USER_REJECTED or WALLET_ERROR.
  */
-function normalizeWalletError(error, fallbackMessage = "Wallet error") {
+export function normalizeWalletError(error, fallbackMessage = "Wallet error") {
   const message = error?.message || fallbackMessage;
   const lower = String(message).toLowerCase();
   const err = new Error(message);
