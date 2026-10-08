@@ -16,11 +16,67 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
+const MAX_TX_XDR_CHARS = 64 * 1024;
+const MAX_AUTH_ENTRIES = 20;
+const MAX_AUTH_ENTRIES_CHARS = 32 * 1024;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_REQUESTS = 10;
+const RATE_LIMIT_MAX_KEYS = 1024;
+
 type RelayBody = {
   txXdr?: string;
   authEntries?: string[];
   latestLedger?: number;
 };
+
+// Bounded per-isolate rate limiter. Keys are the request Origin when present,
+// otherwise the first X-Forwarded-For hop. The map never grows past
+// RATE_LIMIT_MAX_KEYS entries; when it is full, unknown callers are throttled.
+const rateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function isOwnOrigin(request: Request): boolean {
+  const fetchSite = request.headers.get("sec-fetch-site");
+  if (fetchSite && fetchSite !== "same-origin" && fetchSite !== "same-site") {
+    return false;
+  }
+  const origin = request.headers.get("origin");
+  if (!origin) return true;
+  if (origin === "null") return false;
+  try {
+    return new URL(origin).host === new URL(request.url).host;
+  } catch {
+    return false;
+  }
+}
+
+function rateLimitKey(request: Request): string {
+  const origin = request.headers.get("origin");
+  if (origin) return `origin:${origin}`;
+  const forwarded = request.headers
+    .get("x-forwarded-for")
+    ?.split(",")[0]
+    ?.trim();
+  return `addr:${forwarded ?? "unknown"}`;
+}
+
+function isRateLimited(key: string, now: number): boolean {
+  for (const [k, bucket] of rateBuckets) {
+    if (bucket.resetAt <= now) rateBuckets.delete(k);
+  }
+  const bucket = rateBuckets.get(key);
+  if (!bucket) {
+    if (rateBuckets.size >= RATE_LIMIT_MAX_KEYS) return true;
+    rateBuckets.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return false;
+  }
+  if (bucket.resetAt <= now) {
+    bucket.count = 1;
+    bucket.resetAt = now + RATE_LIMIT_WINDOW_MS;
+    return false;
+  }
+  bucket.count += 1;
+  return bucket.count > RATE_LIMIT_MAX_REQUESTS;
+}
 
 function entryNeedsRelayer(
   entry: xdr.SorobanAuthorizationEntry,
@@ -54,21 +110,12 @@ function patchAuthEntries(txXdr: string, signedAuthEntries: string[]): string {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  const secret = process.env.RELAYER_SECRET;
-  if (!secret) {
-    return Response.json(
-      { error: "Relayer is not configured. Run scripts/setup-relayer.mjs." },
-      { status: 503 },
-    );
+  if (!isOwnOrigin(request)) {
+    return Response.json({ error: "Forbidden origin" }, { status: 403 });
   }
-
-  let relayer: Keypair;
-  try {
-    relayer = Keypair.fromSecret(secret);
-  } catch {
-    return Response.json({ error: "Invalid RELAYER_SECRET" }, { status: 500 });
+  if (isRateLimited(rateLimitKey(request), Date.now())) {
+    return Response.json({ error: "Too many requests" }, { status: 429 });
   }
-  const address = relayer.publicKey();
 
   let body: RelayBody;
   try {
@@ -86,6 +133,38 @@ export async function POST(request: Request): Promise<Response> {
   if (!Array.isArray(authEntries)) {
     return Response.json({ error: "Invalid authEntries" }, { status: 400 });
   }
+  if (txXdr.length > MAX_TX_XDR_CHARS) {
+    return Response.json({ error: "txXdr too large" }, { status: 413 });
+  }
+  if (authEntries.length > MAX_AUTH_ENTRIES) {
+    return Response.json({ error: "Too many authEntries" }, { status: 413 });
+  }
+  if (authEntries.some((entry) => typeof entry !== "string")) {
+    return Response.json({ error: "Invalid authEntries" }, { status: 400 });
+  }
+  const authEntriesChars = (authEntries as string[]).reduce(
+    (total, entry) => total + entry.length,
+    0,
+  );
+  if (authEntriesChars > MAX_AUTH_ENTRIES_CHARS) {
+    return Response.json({ error: "authEntries too large" }, { status: 413 });
+  }
+
+  const secret = process.env.RELAYER_SECRET;
+  if (!secret) {
+    return Response.json(
+      { error: "Relayer is not configured. Run scripts/setup-relayer.mjs." },
+      { status: 503 },
+    );
+  }
+
+  let relayer: Keypair;
+  try {
+    relayer = Keypair.fromSecret(secret);
+  } catch {
+    return Response.json({ error: "Invalid RELAYER_SECRET" }, { status: 500 });
+  }
+  const address = relayer.publicKey();
 
   const networkPassphrase = STELLAR.networkPassphrase;
   const server = new rpc.Server(STELLAR.rpcUrl, {
