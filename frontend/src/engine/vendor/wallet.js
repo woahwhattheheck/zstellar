@@ -121,8 +121,9 @@ export function startWalletWatcher(opts) {
   const res = watcher.watch((info) => {
     try {
       onChange?.(info);
-    } catch (e) {
-      console.warn("[Wallet] watch callback failed:", e);
+    } catch {
+      // Swallowed deliberately: wallet modules must not write key-derivation
+      // context or error objects to the console (privacy surface).
     }
   });
   if (res?.error) {
