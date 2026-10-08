@@ -73,6 +73,7 @@ export function ActionPanel() {
   const [status, setStatus] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [shielded, setShielded] = useState<bigint | null>(null);
+  const [shieldedError, setShieldedError] = useState<string | null>(null);
   const [phase, setPhase] = useState<TxPhase | null>(null);
   const [stage, setStage] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -100,16 +101,44 @@ export function ActionPanel() {
     const address = wallet.address;
     if (!address) {
       setShielded(null);
+      setShieldedError(null);
       return;
     }
     let cancelled = false;
-    getShieldedBalance(address).then((value) => {
-      if (!cancelled) setShielded(value);
-    });
+    setShieldedError(null);
+    getShieldedBalance(address)
+      .then((value) => {
+        if (!cancelled) setShielded(value);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setShieldedError(
+            error instanceof Error
+              ? error.message
+              : "Could not load shielded balance",
+          );
+        }
+      });
     return () => {
       cancelled = true;
     };
   }, [wallet.address]);
+
+  // Single-shot reload used by the UI's retry affordance after a failure.
+  const retryShielded = async () => {
+    const address = wallet.address;
+    if (!address) return;
+    setShieldedError(null);
+    try {
+      setShielded(await getShieldedBalance(address));
+    } catch (error) {
+      setShieldedError(
+        error instanceof Error
+          ? error.message
+          : "Could not load shielded balance",
+      );
+    }
+  };
 
   const onStatus = (update: StatusUpdate) => {
     setStage(update.stage);
@@ -121,8 +150,18 @@ export function ActionPanel() {
     if (!address) return;
     let first: bigint | null = null;
     for (let i = 0; i < 10; i++) {
-      const value = await getShieldedBalance(address);
-      setShielded(value);
+      try {
+        const value = await getShieldedBalance(address);
+        setShielded(value);
+        setShieldedError(null);
+      } catch (error) {
+        setShieldedError(
+          error instanceof Error
+            ? error.message
+            : "Could not load shielded balance",
+        );
+        return;
+      }
       if (first === null) first = value;
       else if (value !== first) return;
       await new Promise((resolve) => setTimeout(resolve, 3000));
@@ -307,13 +346,27 @@ export function ActionPanel() {
           Shielded Balance
         </span>
         <span className="flex items-center gap-2 font-semibold text-fg">
-          {shielded != null ? formatXlm(stroopsToXlm(shielded)) : "0"} XLM
+          {shieldedError ? (
+            <button
+              type="button"
+              onClick={() => void retryShielded()}
+              title={shieldedError}
+              className="cursor-pointer text-sm font-normal text-muted underline underline-offset-2"
+            >
+              Unavailable — retry
+            </button>
+          ) : (
+            <>
+              {shielded != null ? formatXlm(stroopsToXlm(shielded)) : "0"} XLM
+            </>
+          )}
           <Image
             src="/Assets/Images/Logo-Coin/stellar-logo.svg"
             alt="XLM"
             width={16}
             height={16}
             className="h-4 w-4 object-contain dark:invert"
+            unoptimized
           />
         </span>
       </div>
