@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { patchLedgerContent } from "./ledger-patch.mjs";
 
 const RPC = "https://soroban-testnet.stellar.org";
 
@@ -46,32 +47,24 @@ async function main() {
 
     console.log(`Patching ${file}...`);
     const buf = fs.readFileSync(filePath);
-    const contentStr = buf.toString("binary");
 
     // We search for `"deploymentLedger":XXXXXXX` where XXXXXXX is 7 digits
-    const regex = /"deploymentLedger":\d{7}/g;
-    const matches = contentStr.match(regex);
+    const result = patchLedgerContent(buf.toString("binary"), newLedger);
 
-    if (!matches) {
+    if (!result.matched) {
       console.log(`No deploymentLedger matching pattern found in ${file}`);
       continue;
     }
 
-    console.log(`Found pattern: ${matches.join(", ")}`);
-    const replaced = contentStr.replace(
-      regex,
-      `"deploymentLedger":${newLedger}`,
-    );
-
-    // Safety check: verify length did not change
-    if (replaced.length !== contentStr.length) {
+    if (!result.ok) {
       console.error(
-        `Error: Length mismatch after patching! Original: ${contentStr.length}, Patched: ${replaced.length}`,
+        `Error: Length mismatch after patching! Original: ${result.originalLength}, Patched: ${result.patchedLength}`,
       );
       process.exit(1);
     }
 
-    fs.writeFileSync(filePath, Buffer.from(replaced, "binary"));
+    console.log(`Found pattern: ${result.found.join(", ")}`);
+    fs.writeFileSync(filePath, Buffer.from(result.content, "binary"));
     console.log(`Successfully patched ${file}`);
   }
 
