@@ -5,31 +5,22 @@
  */
 
 import {
-  Address,
   authorizeEntry,
   rpc,
   Transaction,
   xdr,
 } from "@stellar/stellar-sdk";
 import { Buffer } from "buffer";
+import {
+  entryNeedsSigner as needsWalletAuthEntry,
+  patchAuthEntries,
+} from "./auth-entries.js";
 import { signWalletAuthEntry, signWalletTransaction } from "./wallet.js";
+
+export { needsWalletAuthEntry, patchAuthEntries };
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
-}
-
-function needsWalletAuthEntry(entry, address) {
-  const creds = entry.credentials();
-  if (
-    creds.switch() !== xdr.SorobanCredentialsType.sorobanCredentialsAddress()
-  ) {
-    return false;
-  }
-  const addrAuth = creds.address();
-  if (addrAuth.signature().switch().name !== "scvVoid") {
-    return false;
-  }
-  return Address.fromScAddress(addrAuth.address()).toString() === address;
 }
 
 async function signPreparedAuthEntry(
@@ -68,28 +59,6 @@ async function signPreparedAuthEntry(
   );
 
   return signed.toXDR("base64");
-}
-
-function patchAuthEntries(txXdr, signedAuthEntries) {
-  const env = xdr.TransactionEnvelope.fromXDR(txXdr, "base64");
-  const v1 = env.v1();
-  if (!v1) {
-    throw new Error("Unsupported transaction envelope (expected v1)");
-  }
-
-  const auth = signedAuthEntries.map((e) =>
-    xdr.SorobanAuthorizationEntry.fromXDR(e, "base64"),
-  );
-  for (const op of v1.tx().operations()) {
-    const invoke = op.body()?.invokeHostFunctionOp?.();
-    if (!invoke) continue;
-    invoke.auth(auth);
-    return env.toXDR("base64");
-  }
-
-  throw new Error(
-    "No invokeHostFunction operation found to attach auth entries",
-  );
 }
 
 /**
