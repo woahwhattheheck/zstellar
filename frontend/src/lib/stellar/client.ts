@@ -1,38 +1,11 @@
-import {
-  BASE_FEE,
-  Contract,
-  Horizon,
-  rpc,
-  scValToNative,
-  TransactionBuilder,
-} from "@stellar/stellar-sdk";
-import { browserRpcUrl, CONTRACTS, STELLAR } from "./config";
+import { Horizon, rpc } from "@stellar/stellar-sdk";
+import { browserRpcUrl, STELLAR } from "./config";
 
 const rpcUrl = browserRpcUrl();
 export const server = new rpc.Server(rpcUrl, {
   allowHttp: !rpcUrl.startsWith("https://"),
 });
 export const horizon = new Horizon.Server(STELLAR.horizonUrl);
-
-export async function getLatestLedger() {
-  return server.getLatestLedger();
-}
-
-export async function getPoolRoot(): Promise<bigint | null> {
-  const account = await server.getAccount(CONTRACTS.deployer);
-  const contract = new Contract(CONTRACTS.pool);
-  const tx = new TransactionBuilder(account, {
-    fee: BASE_FEE,
-    networkPassphrase: STELLAR.networkPassphrase,
-  })
-    .addOperation(contract.call("get_root"))
-    .setTimeout(30)
-    .build();
-
-  const sim = await server.simulateTransaction(tx);
-  if (rpc.Api.isSimulationError(sim) || !sim.result) return null;
-  return scValToNative(sim.result.retval) as bigint;
-}
 
 export async function fundWithFriendbot(address: string): Promise<boolean> {
   try {
