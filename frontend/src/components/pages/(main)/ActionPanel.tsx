@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   TbChevronDown,
   TbExternalLink,
@@ -77,6 +77,15 @@ export function ActionPanel() {
   const [stage, setStage] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const wallet = useWalletContext();
+  const actionAbort = useRef<AbortController | null>(null);
+
+  // Abort any in-flight deposit retry loop when the panel unmounts.
+  useEffect(
+    () => () => {
+      actionAbort.current?.abort();
+    },
+    [],
+  );
 
   const asset = TOKENS[assetIndex];
   const filteredTokens = TOKENS.filter((token) => {
@@ -142,10 +151,12 @@ export function ActionPanel() {
 
       let hashes: string[] | null = null;
       if (active === "deposit") {
+        actionAbort.current = new AbortController();
         hashes = await depositWithAutoRegister(
           wallet.address,
           amount,
           onStatus,
+          actionAbort.current.signal,
         );
       } else if (active === "transfer") {
         const [noteKey, encKey] = recipient.split(":");
