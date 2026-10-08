@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   TbChevronDown,
   TbExternalLink,
@@ -19,6 +19,7 @@ import {
   withdraw,
 } from "@/engine";
 import { useWalletContext } from "@/features/wallet";
+import { pollUntilChanged } from "@/lib/pollUntilChanged";
 import { TxModal, type TxPhase } from "./TxModal";
 import { ActionTabs, TABS, useActionTab } from "./tabs";
 
@@ -77,6 +78,7 @@ export function ActionPanel() {
   const [stage, setStage] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const wallet = useWalletContext();
+  const refreshAbortRef = useRef<AbortController | null>(null);
 
   const asset = TOKENS[assetIndex];
   const filteredTokens = TOKENS.filter((token) => {
@@ -111,6 +113,13 @@ export function ActionPanel() {
     };
   }, [wallet.address]);
 
+  useEffect(
+    () => () => {
+      refreshAbortRef.current?.abort();
+    },
+    [],
+  );
+
   const onStatus = (update: StatusUpdate) => {
     setStage(update.stage);
     setStatus(update.message);
@@ -119,14 +128,12 @@ export function ActionPanel() {
   const refreshShielded = async () => {
     const address = wallet.address;
     if (!address) return;
-    let first: bigint | null = null;
-    for (let i = 0; i < 10; i++) {
-      const value = await getShieldedBalance(address);
-      setShielded(value);
-      if (first === null) first = value;
-      else if (value !== first) return;
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-    }
+    refreshAbortRef.current?.abort();
+    const controller = new AbortController();
+    refreshAbortRef.current = controller;
+    await pollUntilChanged(() => getShieldedBalance(address), setShielded, {
+      signal: controller.signal,
+    });
   };
 
   const runAction = async () => {
