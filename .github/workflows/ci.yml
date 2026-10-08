@@ -149,6 +149,30 @@ jobs:
         printf '%s\\n' \"$engine_headers\"\nprintf '%s\\n' \"$engine_headers\" | grep\
         \ -qi 'cache-control: no-store'\n\necho \"COOP/COEP and the /engine no-store\
         \ header are intact.\"\n"
+  test:
+    name: Vitest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    - name: Install pnpm
+      uses: pnpm/action-setup@v4
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: pnpm
+        cache-dependency-path: frontend/pnpm-lock.yaml
+    - name: Install dependencies
+      working-directory: frontend
+      run: pnpm install --frozen-lockfile
+    - name: Run vitest
+      working-directory: frontend
+      run: pnpm test
   ci-ok:
     name: ci-ok
     runs-on: ubuntu-latest
@@ -160,6 +184,7 @@ jobs:
     - secret-scan
     - docs-drift
     - headers
+    - test
     steps:
     - name: Verify every required job succeeded
       run: "results=\"${{ join(needs.*.result, ',') }}\"\necho \"Job results: ${results}\"\
