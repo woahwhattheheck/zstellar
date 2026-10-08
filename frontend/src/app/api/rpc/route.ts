@@ -18,28 +18,57 @@ const CORS_HEADERS: Record<string, string> = {
   "Cache-Control": "no-store",
 };
 
+// Soroban RPC cursors open with the ledger sequence as a zero-padded
+// decimal segment before the first dash.
+function cursorLedger(cursor: unknown): number | null {
+  if (typeof cursor !== "string") return null;
+  const head = cursor.split("-")[0];
+  if (!/^\d{1,19}$/.test(head)) return null;
+  const n = Number(head);
+  return Number.isFinite(n) ? n : null;
+}
+
 export async function POST(request: Request): Promise<Response> {
   let body = await request.text();
+
+  // Parse the request once: the getEvents startLedger rewrite and the
+  // out-of-range interception both need the method, id, cursor and
+  // startLedger.
+  type JsonRpcRequest = {
+    method?: string;
+    id?: string | number | null;
+    params?: {
+      startLedger?: number;
+      pagination?: { cursor?: string };
+    };
+  };
+  let reqJson: JsonRpcRequest | null = null;
+  try {
+    reqJson = JSON.parse(body) as JsonRpcRequest;
+  } catch {
+    // Not JSON — pass through unchanged
+  }
+  const reqMethod = reqJson?.method;
+  const reqId = reqJson?.id ?? null;
+  const reqCursor = reqJson?.params?.pagination?.cursor;
+  let reqStartLedger = reqJson?.params?.startLedger;
 
   // Rewrite getEvents requests that start before our new deployment ledger.
   // The WASM binary has the old deployment ledger (~3158xxx) hardcoded; those
   // ledgers are pruned on testnet. We transparently rewrite to the new
   // deployment start so the WASM gets a valid, real RPC response.
-  try {
-    const json = JSON.parse(body);
-    if (
-      json?.method === "getEvents" &&
-      json?.params?.startLedger != null &&
-      Number(json.params.startLedger) < NEW_DEPLOYMENT_LEDGER
-    ) {
-      console.log(
-        `[RPC Proxy] Rewriting startLedger ${json.params.startLedger} → ${NEW_DEPLOYMENT_LEDGER}`,
-      );
-      json.params.startLedger = NEW_DEPLOYMENT_LEDGER;
-      body = JSON.stringify(json);
-    }
-  } catch {
-    // Not JSON — pass through unchanged
+  if (
+    reqJson?.params &&
+    reqMethod === "getEvents" &&
+    reqStartLedger != null &&
+    Number(reqStartLedger) < NEW_DEPLOYMENT_LEDGER
+  ) {
+    console.log(
+      `[RPC Proxy] Rewriting startLedger ${reqStartLedger} → ${NEW_DEPLOYMENT_LEDGER}`,
+    );
+    reqJson.params.startLedger = NEW_DEPLOYMENT_LEDGER;
+    reqStartLedger = NEW_DEPLOYMENT_LEDGER;
+    body = JSON.stringify(reqJson);
   }
 
   let lastError = "upstream unreachable";
@@ -98,64 +127,69 @@ export async function POST(request: Request): Promise<Response> {
       continue;
     }
 
-    // Intercept "startLedger must be within the ledger range" error and return empty events page.
-    // This resolves a bug in the precompiled WASM client where start_ledger is not updated
-    // inside the pagination page loop, causing it to fall behind the cursor and fail to trigger RpcAhead.
-    let isOutOfRangeError = false;
-    let rangeOldest = 0;
-    let rangeNewest = 0;
-    try {
-      const resJson = JSON.parse(text);
-      const errMsg = resJson?.error?.message;
-      if (errMsg?.includes("startLedger must be within the ledger range:")) {
-        const match = errMsg.match(/range:\s*(\d+)\s*-\s*(\d+)/);
-        if (match) {
-          isOutOfRangeError = true;
-          rangeOldest = Number(match[1]);
-          rangeNewest = Number(match[2]);
-        }
-      }
-    } catch {
-      // ignore JSON parse error
-    }
-
-    if (isOutOfRangeError) {
-      let reqId = null;
-      let reqCursor = null;
-      let reqStartLedger = null;
+    // Intercept the "startLedger must be within the ledger range" error only
+    // for getEvents requests, and only when the requested page position is past
+    // the newest ledger upstream knows about — the client cannot advance, so
+    // it gets a synthesized empty page. Any other occurrence of the error
+    // (non-getEvents method, or a page position that is still inside the
+    // reported range) propagates the upstream error unchanged instead of
+    // masking it.
+    // This resolves a bug in the precompiled WASM client where start_ledger is
+    // not updated inside the pagination page loop, causing it to fall behind
+    // the cursor and fail to trigger RpcAhead.
+    if (reqMethod === "getEvents") {
+      let isOutOfRangeError = false;
+      let rangeOldest = 0;
+      let rangeNewest = 0;
       try {
-        const reqJson = JSON.parse(body);
-        reqId = reqJson?.id;
-        reqCursor = reqJson?.params?.pagination?.cursor;
-        reqStartLedger = reqJson?.params?.startLedger;
+        const resJson = JSON.parse(text);
+        const errMsg = resJson?.error?.message;
+        if (errMsg?.includes("startLedger must be within the ledger range:")) {
+          const match = errMsg.match(/range:\s*(\d+)\s*-\s*(\d+)/);
+          if (match) {
+            isOutOfRangeError = true;
+            rangeOldest = Number(match[1]);
+            rangeNewest = Number(match[2]);
+          }
+        }
       } catch {
-        // ignore
+        // ignore JSON parse error
       }
 
-      // If client didn't supply a cursor, generate one from the startLedger or rangeNewest
-      const finalCursor =
-        reqCursor ||
-        `${String(reqStartLedger || rangeNewest).padStart(19, "0")}-0000000000`;
+      if (isOutOfRangeError) {
+        const startLedgerNum = Number(reqStartLedger);
+        const reqLedger =
+          cursorLedger(reqCursor) ??
+          (Number.isFinite(startLedgerNum) ? startLedgerNum : 0);
+        if (reqLedger > rangeNewest) {
+          // If client didn't supply a cursor, generate one from the
+          // startLedger or rangeNewest
+          const finalCursor =
+            reqCursor ||
+            `${String(reqStartLedger || rangeNewest).padStart(19, "0")}-0000000000`;
 
-      console.log(
-        `[RPC Proxy] Intercepting startLedger out-of-range error. Returning empty events page at ledger ${rangeNewest} with cursor ${finalCursor}`,
-      );
+          console.log(
+            `[RPC Proxy] Intercepting startLedger out-of-range error. Returning empty events page at ledger ${rangeNewest} with cursor ${finalCursor}`,
+          );
 
-      return new Response(
-        JSON.stringify({
-          jsonrpc: "2.0",
-          id: reqId,
-          result: {
-            events: [],
-            cursor: finalCursor,
-            latestLedger: rangeNewest,
-            oldestLedger: rangeOldest,
-            latestLedgerCloseTime: String(Math.floor(Date.now() / 1000)),
-            oldestLedgerCloseTime: "1782052423",
-          },
-        }),
-        { status: 200, headers: CORS_HEADERS },
-      );
+          return new Response(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: reqId,
+              result: {
+                events: [],
+                cursor: finalCursor,
+                latestLedger: rangeNewest,
+                oldestLedger: rangeOldest,
+                latestLedgerCloseTime: String(Math.floor(Date.now() / 1000)),
+              },
+            }),
+            { status: 200, headers: CORS_HEADERS },
+          );
+        }
+        // The requested position is still inside the reported range, so the
+        // request can be advanced — propagate the upstream error unchanged.
+      }
     }
 
     // Check for transient RPC errors inside response JSON
