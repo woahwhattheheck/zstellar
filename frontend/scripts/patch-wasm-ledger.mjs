@@ -7,6 +7,9 @@ const RPC = "https://soroban-testnet.stellar.org";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const WASM_DIR = path.resolve(__dirname, "..", "public", "engine", "js");
+const SHARED_LEDGER_FILE = path.resolve(
+  __dirname, "..", "src", "lib", "deployment-ledger.json",
+);
 
 async function getLatestLedger() {
   const res = await fetch(RPC, {
@@ -29,6 +32,10 @@ async function main() {
   const latest = await getLatestLedger();
   // Safe buffer: 1000 ledgers (approx 1.4 hours of history)
   const newLedger = latest - 1000;
+  // Rewriting WASM bytes requires an equal-width seven-digit replacement.
+  if (!Number.isSafeInteger(newLedger) || String(newLedger).length !== 7) {
+    throw new Error("Deployment ledger must be a seven-digit integer");
+  }
   console.log(`Latest ledger: ${latest}. Target start ledger: ${newLedger}`);
 
   const files = [
@@ -37,6 +44,7 @@ async function main() {
     "storage-worker_bg.wasm",
   ];
 
+  let patched = 0;
   for (const file of files) {
     const filePath = path.join(WASM_DIR, file);
     if (!fs.existsSync(filePath)) {
@@ -53,8 +61,7 @@ async function main() {
     const matches = contentStr.match(regex);
 
     if (!matches) {
-      console.log(`No deploymentLedger matching pattern found in ${file}`);
-      continue;
+      throw new Error(`No seven-digit deploymentLedger found in ${file}`);
     }
 
     console.log(`Found pattern: ${matches.join(", ")}`);
@@ -72,8 +79,19 @@ async function main() {
     }
 
     fs.writeFileSync(filePath, Buffer.from(replaced, "binary"));
+    patched += 1;
     console.log(`Successfully patched ${file}`);
   }
+
+  if (patched === 0) {
+    throw new Error("No WASM bundles were updated; shared ledger left unchanged");
+  }
+  // Only update the shared RPC route value after the patch operation succeeds.
+  fs.writeFileSync(
+    SHARED_LEDGER_FILE,
+    `${JSON.stringify({ ledger: newLedger }, null, 2)}\n`,
+  );
+  console.log(`Updated shared deployment ledger: ${newLedger}`);
 
   console.log(
     "\nAll done! Restart your Next.js dev server or refresh the browser.",
