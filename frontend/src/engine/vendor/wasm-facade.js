@@ -10,14 +10,19 @@ let handle = null;
 let mod = null;
 let initPromise = null;
 
-export async function initializeWasm(rpcUrl) {
+// Optional loader permits deterministic single-flight/retry tests without fetching
+// the real WASM from /public. Runtime callers use the same dynamic import.
+export async function initializeWasm(
+  rpcUrl,
+  moduleLoader = (url) => import(/* webpackIgnore: true */ /* @vite-ignore */ url),
+) {
   if (handle) return handle;
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
     const url = `${window.location.origin}/engine/js/web.js`;
     mod =
-      mod ?? (await import(/* webpackIgnore: true */ /* @vite-ignore */ url));
+      mod ?? (await moduleLoader(url));
 
     await mod.default();
     const config = new mod.Config(rpcUrl);
