@@ -48,8 +48,7 @@ async function main() {
   for (const file of files) {
     const filePath = path.join(WASM_DIR, file);
     if (!fs.existsSync(filePath)) {
-      console.warn(`File not found: ${filePath}`);
-      continue;
+      throw new Error(`Required WASM file not found: ${filePath}`);
     }
 
     console.log(`Patching ${file}...`);
@@ -83,8 +82,8 @@ async function main() {
     console.log(`Successfully patched ${file}`);
   }
 
-  if (patched === 0) {
-    throw new Error("No WASM bundles were updated; shared ledger left unchanged");
+  if (patched !== files.length) {
+    throw new Error("Not all WASM bundles were updated; shared ledger left unchanged");
   }
   // Only update the shared RPC route value after the patch operation succeeds.
   fs.writeFileSync(
